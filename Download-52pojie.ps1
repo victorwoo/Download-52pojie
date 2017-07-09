@@ -1,10 +1,12 @@
 ﻿#$DebugPreference = 'SilentlyContinue'
 $DebugPreference = 'Continue'
 
-$baseUrl = 'https://down.52pojie.cn/Tools/'
+$baseUrl = 'https://down.52pojie.cn/'
 
 function Process-Page ([string]$url) {
+    Write-Debug $url
     $resp = Invoke-WebRequest $url -UseBasicParsing
+    if ($resp.StatusCode -ne 200) { exit }
     $resp.Links | Where-Object {
         $link = $PSItem
         if ($link.href.StartsWith('?')) { return $false }
@@ -27,7 +29,7 @@ function Process-Page ([string]$url) {
             # 目录
             Write-Debug "目录 $link"
             if (-not (Test-Path $sublink.title)) {
-                md $sublink.title
+                md $sublink.title | Out-Null
             }
             Set-Location $sublink.title
             $suburl = $url + $sublink.href
@@ -35,8 +37,8 @@ function Process-Page ([string]$url) {
             Set-Location ..
         } else {
             # 文件
-            Write-Debug "文件 $link"
-            Invoke-WebRequest $sublink.href -OutFile $sublink.title
+            Write-Debug "文件 $sublink"
+            Invoke-WebRequest ($url + $sublink.href) -OutFile $sublink.title
         }
     }
 }
