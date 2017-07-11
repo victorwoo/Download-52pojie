@@ -1,10 +1,13 @@
 ﻿#$DebugPreference = 'SilentlyContinue'
 $DebugPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 
 $baseUrl = 'https://down.52pojie.cn/'
 
+[Reflection.Assembly]::LoadWithPartialName("System.Web") | Out-Null
+
 function Process-Page ([string]$url) {
-    Write-Debug $url
+    Write-Debug "Processing $url"
     $resp = Invoke-WebRequest $url -UseBasicParsing
     if ($resp.StatusCode -ne 200) { exit }
     $resp.Links | Where-Object {
@@ -16,31 +19,44 @@ function Process-Page ([string]$url) {
         return $true
     } | ForEach-Object {
         $link = $PSItem
-        $href = [System.Web.HttpUtility]::UrlDecode($link.href) 
+        #$href = [System.Web.HttpUtility]::UrlDecode($link.href) 
         $titleBytes = [System.Text.Encoding]::GetEncoding('latin1').GetBytes($link.title)
         $title = [System.Text.Encoding]::UTF8.GetString($titleBytes)
         return [PSCustomObject][Ordered]@{
-            href = $href;
+            href = $link.href;
             title = $title;
         }
     } | ForEach-Object {
         $sublink = $PSItem
         if ($sublink.href.EndsWith('/')) {
             # 目录
-            Write-Debug "目录 $link"
+            #Write-Debug "目录 $link"
             if (-not (Test-Path $sublink.title)) {
                 md $sublink.title | Out-Null
             }
+            Write-Output "进入目录 $($sublink.title)"
+            Push-Location
             Set-Location $sublink.title
             $suburl = $url + $sublink.href
             Process-Page $suburl
-            Set-Location ..
+            Pop-Location
         } else {
             # 文件
-            Write-Debug "文件 $sublink"
-            Invoke-WebRequest ($url + $sublink.href) -OutFile $sublink.title
+            #Write-Debug "文件 $sublink"
+            if (Test-Path -PathType Leaf $sublink.title) { return } # 文件已存在
+            #Write-Output "下载 $($sublink.title)"
+            Write-Output "下载 $($url + $sublink.href)"
+            $fileResp = Invoke-WebRequest ($url + $sublink.href) -OutFile "$($sublink.title).downloading"
+            if ($resp.StatusCode -ne 200) { exit }
+            Rename-Item "$($sublink.title).downloading" $sublink.title
         }
     }
 }
 
-Process-Page $baseUrl
+Push-Location
+try {
+    Remove-Item *.downloading -Recurse
+    Process-Page $baseUrl
+} finally {
+    Pop-Location
+}
