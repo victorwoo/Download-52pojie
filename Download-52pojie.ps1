@@ -41,14 +41,17 @@ function Process-Page ([string]$url) {
             Process-Page $suburl
             Pop-Location
         } else {
+            if ($sublink.title.StartsWith('Accent')) {
+                Write-Output 'debug'
+            }
             # 文件
             #Write-Debug "文件 $sublink"
-            if (Test-Path -PathType Leaf $sublink.title) { return } # 文件已存在
+            if (Test-Path -PathType Leaf -LiteralPath $sublink.title) { return } # 文件已存在
             #Write-Output "下载 $($sublink.title)"
             Write-Output "下载 $($url + $sublink.href)"
-            $fileResp = Invoke-WebRequest ($url + $sublink.href) -OutFile "$($sublink.title).downloading"
+            $fileResp = Invoke-WebRequest ($url + $sublink.href) -OutFile "temp.downloading"
             if ($resp.StatusCode -ne 200) { exit }
-            Rename-Item "$($sublink.title).downloading" $sublink.title
+            Rename-Item "temp.downloading" $sublink.title
         }
     }
 }
@@ -56,6 +59,8 @@ function Process-Page ([string]$url) {
 Push-Location
 try {
     Remove-Item *.downloading -Recurse
+    if (-not (Test-Path download)) { md download | Out-Null }
+    Set-Location download
     Process-Page $baseUrl
 } finally {
     Pop-Location
